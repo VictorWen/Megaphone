@@ -1,5 +1,6 @@
 import asyncio
 import discord
+import nacl
 from discord.ext import commands
 from decouple import config
 import utils

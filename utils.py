@@ -26,6 +26,7 @@ ffmpeg_options = {
 }
 
 PLAYTIME = 15
+FALLOFF = 5
 
 connection_queue = {}
 play_starts = {}
@@ -77,12 +78,18 @@ async def play_audio(member, channel):
         print("Playing audio")
         vc.play(audio_player)
         play_starts[member.guild.id] = str(time.time())
-        await asyncio.sleep(PLAYTIME)
-        if time.time() - float(play_starts[member.guild.id]) >= PLAYTIME - 0.5:
+        await asyncio.sleep(PLAYTIME + 0.5)
+        if time.time() - float(play_starts[member.guild.id]) >= PLAYTIME:
+            while time.time() - float(play_starts[member.guild.id]) - PLAYTIME < FALLOFF:
+              audio_player.volume -= (0.1/FALLOFF)
+              await asyncio.sleep(0.1)
+              if (time.time() - float(play_starts[member.guild.id]) < PLAYTIME):
+                return
             print("Finished playing audio")
             vc.stop()
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.1)
             await vc.disconnect()
+            print("Successfully disconnected")
             vc.cleanup()
 
 
