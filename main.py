@@ -17,8 +17,7 @@ async def on_ready():
 
 @client.event
 async def on_voice_state_update(member, before, after):
-    if not member.bot and str(member.id) not in utils.get_blacklist(member.guild) and \
-            after.channel is not None and before.channel != after.channel:
+    if not member.bot and str(member.id) not in utils.get_blacklist(member.guild) and after.channel is not None and before.channel != after.channel:
         print("Detected {0} joined a channel in {1}".format(member, member.guild))
         await utils.play_audio(member, after.channel)
 
@@ -29,16 +28,17 @@ async def fanfare(context, url, start = None, length = None):
     if validators.url(url):
         msg += "Successfully added new fanfare for {0.mention}"
         utils.set_data(context.guild, context.author, "url", url)
-        if start and start.isnumeric() and float(start) > 0:
+        if start and (start.isnumeric() or start.replace('.', '', 1).isdigit()) and float(start) > 0:
             utils.set_data(context.guild, context.author, "start", start)
             msg += " starting at " + start + " seconds"
+            if length and (length.isnumeric() or length.replace('.', '', 1).isdigit()) and float(length) > 0:
+                utils.set_data(context.guild, context.author, "length", length)
+                msg += " and lasting " + length + " seconds"
+            else:
+                utils.set_data(context.guild, context.author, "length", None)
         else:
             utils.set_data(context.guild, context.author, "start", None)
-        if length and length.isnumeric() and float(length) > 0:
-            utils.set_data(context.guild, context.author, "length", length)
-            msg += " and lasting " + length + " seconds"
-        else:
-            utils.set_data(context.guild, context.author, "length", None)
+
         await context.send(msg.format(context.author))
         print("Added new fanfare for: {0.name}".format(context.author))
     else:
