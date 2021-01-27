@@ -66,9 +66,8 @@ async def play_audio(member: discord.User, channel: discord.VoiceChannel):
     if start:
       ffmpeg_options["options"] += " -ss " + start
     length = get_data(member.guild, member, "length")
-    if length:
-      length = min(float(length), PLAYTIME + FALLOFF)
-      ffmpeg_options["options"] += " -t " + str(length + 1);
+    length = min(float(length), PLAYTIME + FALLOFF) if length else PLAYTIME + FALLOFF
+    ffmpeg_options["options"] += " -t " + str(length + 1);
 
     # Stream the audio from the youtube video as an audio player
     # IDK what this really does
@@ -87,10 +86,10 @@ async def play_audio(member: discord.User, channel: discord.VoiceChannel):
         
         start_time = str(time.time())
         play_starts[member.guild.id] = start_time
-        play_length = min(PLAYTIME, length) if length else PLAYTIME
+        play_length = min(PLAYTIME, length)
         await asyncio.sleep(play_length + 0.5)
         if start_time == play_starts[member.guild.id]:
-            falloff_time = length - play_length if length else FALLOFF
+            falloff_time = length - play_length
             while time.time() - float(play_starts[member.guild.id]) - play_length < falloff_time:
                 audio_player.volume -= (0.1 / FALLOFF)
                 await asyncio.sleep(0.1)
