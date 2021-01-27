@@ -24,13 +24,27 @@ async def on_voice_state_update(member, before, after):
 
 
 @client.command()
-async def fanfare(context, args):
-    if validators.url(args):
-        utils.set_data(context.guild, context.author.id, args)
+async def fanfare(context, url, start = None, length = None):
+    msg = ""
+    if validators.url(url):
+        msg += "Successfully added new fanfare for {0.mention}"
+        utils.set_data(context.guild, context.author, "url", url)
+        if start and start.isnumeric() and float(start) > 0:
+            utils.set_data(context.guild, context.author, "start", start)
+            msg += " starting at " + start + " seconds"
+        else:
+            utils.set_data(context.guild, context.author, "start", None)
+        if length and length.isnumeric() and float(length) > 0:
+            utils.set_data(context.guild, context.author, "length", length)
+            msg += " and lasting " + length + " seconds"
+        else:
+            utils.set_data(context.guild, context.author, "length", None)
+        await context.send(msg.format(context.author))
         print("Added new fanfare for: {0.name}".format(context.author))
-        await context.send("Successfully added new fanfare for: {0.mention}".format(context.author))
     else:
-        await context.send("Not a valid URL")
+        await context.send("Not a valid URL")   
+        return         
+    
 
 
 @client.command()
