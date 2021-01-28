@@ -26,7 +26,7 @@ PLAYTIME = 10
 FALLOFF = 10
 
 connection_queue = {}
-play_id = {}
+play_ids = {}
 
 read_file = open("./data", "r")
 json_str = read_file.read()
@@ -39,24 +39,41 @@ read_file.close()
 
 async def play_audio(member: discord.User, channel: discord.VoiceChannel):
 
-  # Connect to the voice client
-  # Wait for queue
+  # Join the connection queue
   if member.guild.id not in connection_queue:
     connection_queue[member.guild.id] = []
   connect_id = str(time.time())
   connection_queue[member.guild.id].append(connect_id)
+  
+  # Wait for queue
+  waiting = 0
   while connection_queue[member.guild.id][0] != connect_id:
-    await asyncio.sleep(1)
+    if (waiting >= 100):
+      print("Queue timeout")
+      connection_queue[member.guild.id].remove(connect_id)
+      return
+    await asyncio.sleep(0.1)
+    waiting += 1
+  
+  # Connect the voice client
   vc = member.guild.voice_client
-  if not vc or not vc.is_connected():
+  if not vc:
+    print("Connecting...")
     vc = await channel.connect()
+    print("Connected to {0}".format(channel))
   elif vc.channel != channel:
+    print("Moving to {0}".format(channel))
     await vc.move_to(channel)
-  print("Joined {0}".format(channel))
+    await asyncio.sleep(1)
+    if vc.channel == channel:
+      print("Joined {0}".format(channel))
+    else:
+      print("Failed to join {0}".format(channel))
   
   # Use the time as an id for synchronization
-  play_id[member.guild.id] = str(time.time())
-  await asyncio.sleep(1)
+  start_time = str(time.time())
+  play_ids[member.guild.id] = start_time
+  await asyncio.sleep(0.5)
   connection_queue[member.guild.id].pop(0)
 
   # Obtain the URL for the youtube video audio
@@ -85,42 +102,55 @@ async def play_audio(member: discord.User, channel: discord.VoiceChannel):
   length += 0.5
 
   # Create discord audio player
+  print("Finished loading")
   audio = discord.FFmpegPCMAudio(filename, **ffmpeg_options)
   audio_player = discord.PCMVolumeTransformer(audio)
 
   # Play the audio
-  if vc and vc.is_connected():
+  waiting = 0
+  while not vc.is_connected():
+    if waiting >= 10:
+      print("Connection timeout")
+      return
+    await asyncio.sleep(1)
+    waiting += 1
+  if vc and vc.is_connected() and play_ids[member.guild.id] == start_time:
     if vc.is_playing():
       vc.stop()
     print("Playing audio")
     vc.play(audio_player)
     
+    # Update start time
     start_time = str(time.time())
-    play_id[member.guild.id] = start_time
+    play_ids[member.guild.id] = start_time
     play_length = min(PLAYTIME, length)
 
     # normal play
-    while time.time() - float(play_id[member.guild.id]) < play_length:
+    while time.time() - float(play_ids[member.guild.id]) < play_length:
       await asyncio.sleep(0.01)
-      if play_id[member.guild.id] != start_time:
-        # If the play id has changed, stop
+      if play_ids[member.guild.id] != start_time:
+        # If the play id has changed, stop playing
+        vc.stop()
         return
 
     # volume falloff
     falloff_time = length - play_length
-    while time.time() - float(play_id[member.guild.id]) - play_length < falloff_time:
-      audio_player.volume -= (0.01 / FALLOFF)
+    delta = time.time()
+    while delta - float(play_ids[member.guild.id]) - play_length < falloff_time:
+      audio_player.volume -= (time.time() - delta) / FALLOFF
       await asyncio.sleep(0.01)
-      if play_id[member.guild.id] != start_time:
+      if play_ids[member.guild.id] != start_time:
           # If the play id has changed, stop falloff
+          vc.stop()
           return
+      delta = time.time()
       
     # Finish playing
     audio_player.volume = 0
     print("Finished playing audio")
     await asyncio.sleep(0.5)
     # If the same play id, disconnect
-    if play_id[member.guild.id] == start_time:
+    if play_ids[member.guild.id] == start_time:
       vc.stop()
       await asyncio.sleep(0.01)
       await vc.disconnect()

@@ -1,6 +1,6 @@
 import asyncio
 import discord
-import nacl
+import nacl #upm package(pynacl)
 from discord.ext import commands
 from decouple import config
 import utils
@@ -19,7 +19,7 @@ async def on_ready():
 async def on_voice_state_update(member, before, after):
   # Check if not a bot, is not in blacklist, has fanfare enabled, and has moved to a channel
   if not member.bot and str(member.id) not in utils.get_blacklist(member.guild) and utils.get_data(member.guild, member, "enabled") != "false" and after.channel is not None and before.channel != after.channel:
-    print("Detected {0} joined a channel in {1}".format(member, member.guild))
+    print("Detected {0} joined {1} in {2}".format(member, after.channel, member.guild))
     await utils.play_audio(member, after.channel)
 
 
