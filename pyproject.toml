@@ -12,6 +12,8 @@ python-decouple = "^3.4"
 flask = "^1.1.2"
 validators = "^0.18.2"
 pynacl = "^1.4.0"
+replit = "^2.0.0"
+aiofile = "^3.3.3"
 
 [tool.poetry.dev-dependencies]
 

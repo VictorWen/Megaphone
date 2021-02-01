@@ -9,7 +9,6 @@ from keep_alive import keep_alive
 
 client = commands.Bot(command_prefix='*')
 
-
 @client.event
 async def on_ready():
   print('Logged in as {0.user}'.format(client))
@@ -29,21 +28,21 @@ async def fanfare(context, url, start = None, length = None):
   # check if url is a valid URL
   if validators.url(url):
     msg += "Successfully added new fanfare for {0.mention}"
-    utils.set_data(context.guild, context.author, "url", url)
+    await utils.set_data(context.guild, context.author, "url", url)
     # Check if start can be converted to a float and greater than zero
     if start and (start.isnumeric() or start.replace('.', '', 1).isdigit()) and float(start) >= 0:
-      utils.set_data(context.guild, context.author, "start", start)
+      await utils.set_data(context.guild, context.author, "start", start)
       msg += " starting at " + start + " seconds"
 
       # Check if length can be converted to a float and greater than zero
       if length and (length.isnumeric() or length.replace('.', '', 1).isdigit()) and float(length) >= 0:
-        utils.set_data(context.guild, context.author, "length", length)
+        await utils.set_data(context.guild, context.author, "length", length)
         msg += " and lasting " + length + " seconds"
       else:
-        utils.set_data(context.guild, context.author, "length", None)
+        await utils.set_data(context.guild, context.author, "length", None)
     else:
-      utils.set_data(context.guild, context.author, "start", None)
-      utils.set_data(context.guild, context.author, "length", None)
+      await utils.set_data(context.guild, context.author, "start", None)
+      await utils.set_data(context.guild, context.author, "length", None)
 
     await context.send(msg.format(context.author))
     print("Added new fanfare for: {0.name}".format(context.author))
@@ -76,7 +75,7 @@ async def blacklist(context):
       if str(user.id) not in guild_blacklist:
         guild_blacklist.append(str(user.id))
         await context.send("Added {0} to the blacklist".format(user.mention))
-    utils.save_data()
+    await utils.save_data()
 
 
 @client.command()
@@ -90,13 +89,13 @@ async def whitelist(context):
         if str(user.id) in guild_blacklist:
           guild_blacklist.remove(str(user.id))
           await context.send("Removed {0} to the blacklist".format(user.mention))
-      utils.save_data()
+      await utils.save_data()
 
 
 @client.command()
 async def disable(context):
   if utils.get_data(context.guild, context.author, "enabled") != "false":
-    utils.set_data(context.guild, context.author, "enabled", "false")
+    await utils.set_data(context.guild, context.author, "enabled", "false")
     print("Disabling for {0}".format(context.author))
     await context.send("Disabled fanfare for {0}".format(context.author.mention))
 
@@ -104,7 +103,7 @@ async def disable(context):
 @client.command()
 async def enable(context):
   if utils.get_data(context.guild, context.author, "enabled") == "false":
-    utils.set_data(context.guild, context.author, "enabled", "true")
+    await utils.set_data(context.guild, context.author, "enabled", "true")
     print("Enabling for {0}".format(context.author))
     await context.send("Enabled fanfare for {0}".format(context.author.mention))
 
