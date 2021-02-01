@@ -92,15 +92,21 @@ class AdminSettings(commands.Cog):
     The user must also not be blacklisted.
     '''
     if str(ctx.author.id) in utils.get_blacklist(ctx.guild):
+      await utils.send_embed(ctx, "You are blacklisted and cannot change the blacklist.", color = 0)
       return
     permissions = ctx.author.guild_permissions
     if permissions.mute_members or permissions.administrator:
       guild_blacklist = utils.get_blacklist(ctx.guild)
+      if len(ctx.message.mentions) == 0:
+        await utils.send_embed(ctx, "There is no one mentioned. Use @ to mention someone.", color = 0xff0000)
+        return
       for user in ctx.message.mentions:
         if str(user.id) not in guild_blacklist:
           guild_blacklist.append(str(user.id))
           await utils.send_embed(ctx, "Added {0} to the blacklist.".format(user.mention), color = 0)
       await utils.save_data()
+    else:
+      await utils.send_embed(ctx, "You do not have permission to blacklist members.", color = 0xff0000)
 
 
   @commands.command()
@@ -112,15 +118,21 @@ class AdminSettings(commands.Cog):
     The user must also not be blacklisted.
     '''
     if str(ctx.author.id) in utils.get_blacklist(ctx.guild):
+      await utils.send_embed(ctx, "You are blacklisted and cannot change the blacklist.", color = 0)
       return
     permissions = ctx.author.guild_permissions
     if permissions.mute_members or permissions.administrator:
         guild_blacklist = utils.get_blacklist(ctx.guild)
+        if len(ctx.message.mentions) == 0:
+          await utils.send_embed(ctx, "There is no one mentioned. Use @ to mention someone.", color = 0xff0000)
+          return
         for user in ctx.message.mentions:
           if str(user.id) in guild_blacklist:
             guild_blacklist.remove(str(user.id))
             await utils.send_embed(ctx, "Removed {0} to the blacklist.".format(user.mention), color = 0xffffff)
         await utils.save_data()
+    else:
+      await utils.send_embed(ctx, "You do not have permission to whitelist members.", color = 0xff0000)     
 
 
 class UserSettings(commands.Cog):
