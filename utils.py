@@ -66,23 +66,15 @@ async def play_audio(member: discord.User, channel: discord.VoiceChannel):
     raise e
     return
 
-  # Ensure proper connection before continuing
-  timeout = 0
-  while not vc.is_connected():
-    timeout += 1
-    print(f"{play_id}: Waiting for Voice Client connection, attempt #{timeout}")
-    await asyncio.sleep(1)
-    if (timeout > 5):
-      print(f"{play_id}: Failed to conncect to Voice Client")
-      if play_ids[member.guild.id] == play_id:
-        await vc.disconnect(force = True)
-        print(f"{play_id}: Successfully disconnected")
-      return
-
   # Obtain the URL for the youtube video audio
   print(f"{play_id}: Loading Audio...")
-  url = get_data(member.guild, member, "url")
-  url = url if url else "https://www.youtube.com/watch?v=x_XVntliea0"  # default URL
+  url = get_userdata(member.guild, member, "url")
+  guild_fanfare = False
+  if not url and get_guilddata(member.guild, "url"):
+    guild_fanfare = True
+    url = get_guilddata(member.guild, "url")
+  elif not url:
+    url = "https://www.youtube.com/watch?v=x_XVntliea0"# default URL
 
   # Stream the audio from the youtube video as an audio player
   try:
@@ -94,11 +86,11 @@ async def play_audio(member: discord.User, channel: discord.VoiceChannel):
 
     # Set options for start time and length
     ffmpeg_options = {'options': '-vn'}
-    start = get_data(member.guild, member, "start")
+    start = get_userdata(member.guild, member, "start") if not guild_fanfare else get_guilddata(member.guild, "start")
     if start:
       ffmpeg_options["options"] += " -ss " + start
       duration -= float(start)
-    length = get_data(member.guild, member, "length")
+    length = get_userdata(member.guild, member, "length") if not guild_fanfare else get_guilddata(member.guild, "length")
     length = min(float(length), PLAYTIME + FALLOFF) if length else PLAYTIME + FALLOFF
     if length < duration:
       ffmpeg_options["options"] += " -t " + str(length)
@@ -119,6 +111,19 @@ async def play_audio(member: discord.User, channel: discord.VoiceChannel):
     return
 
   print(f"{play_id}: Successfully finished loading audio")
+
+  # Ensure proper connection before continuing
+  timeout = 0
+  while not vc.is_connected() or vc.channel != channel:
+    timeout += 1
+    print(f"{play_id}: Waiting for Voice Client connection, attempt #{timeout}")
+    await asyncio.sleep(1)
+    if (timeout > 5):
+      print(f"{play_id}: Failed to conncect to Voice Client")
+      if play_ids[member.guild.id] == play_id:
+        await vc.disconnect(force = True)
+        print(f"{play_id}: Successfully disconnected")
+      return
 
   # Play the audio
   if play_ids[member.guild.id] == play_id:
@@ -175,7 +180,7 @@ async def play_audio(member: discord.User, channel: discord.VoiceChannel):
     print(f"{play_id}: Audio aborted")
 
 
-def get_data(guild: discord.Guild, member: discord.User, tag: str):
+def get_userdata(guild: discord.Guild, member: discord.User, tag: str):
   if str(guild.id) in data and \
   str(member.id) in data[str(guild.id)] and \
   str(tag) in data[str(guild.id)][str(member.id)]:
@@ -184,7 +189,7 @@ def get_data(guild: discord.Guild, member: discord.User, tag: str):
     return None
 
 
-async def set_data(guild: discord.Guild, member: discord.User, tag: str, datum: str):
+async def set_userdata(guild: discord.Guild, member: discord.User, tag: str, datum: str):
   if str(guild.id) not in data:
     data[str(guild.id)] = {}
   if str(member.id) not in data[str(guild.id)]:
@@ -201,9 +206,22 @@ def get_blacklist(guild: discord.Guild):
   return data[str(guild.id)]["blacklist"]
 
 
+def get_guilddata(guild: discord.Guild, tag: str):
+  if str(guild.id) in data and tag in data[str(guild.id)]:
+    return data[str(guild.id)][tag]
+  else:
+    return None
+
+
+async def set_guilddata(guild: discord.Guild, tag: str, datum: str):
+  if str(guild.id) not in data:
+    data[str(guild.id)] = {}
+  data[str(guild.id)][tag] = datum
+  await save_data()
+  
+
 async def save_data():
   async with async_open("./data", "w") as write_file:
-  # write_file = open()
     write_json_str = json.dumps(data)
     await write_file.write(write_json_str)
 

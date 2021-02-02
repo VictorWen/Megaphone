@@ -17,7 +17,7 @@ async def on_ready():
 @client.event
 async def on_voice_state_update(member, before, after):
   # Check if not a bot, is not in blacklist, has fanfare enabled, and has moved to a channel
-  if not member.bot and str(member.id) not in utils.get_blacklist(member.guild) and utils.get_data(member.guild, member, "enabled") != "false" and after.channel is not None and before.channel != after.channel:
+  if not member.bot and str(member.id) not in utils.get_blacklist(member.guild) and utils.get_userdata(member.guild, member, "enabled") != "false" and after.channel is not None and before.channel != after.channel:
     print("Detected {0} joined {1} in {2}".format(member, after.channel, member.guild))
     await utils.play_audio(member, after.channel)
 
@@ -37,23 +37,22 @@ class Fanfare(commands.Cog):
     # check if url is a valid URL
     if validators.url(yt_url):
       msg += "Successfully added new fanfare for {0.mention}"
-      await utils.set_data(ctx.guild, ctx.author, "url", yt_url)
+      await utils.set_userdata(ctx.guild, ctx.author, "url", yt_url)
       # Check if start can be converted to a float and greater than zero
       if start and (start.isnumeric() or start.replace('.', '', 1).isdigit()) and float(start) >= 0:
-        await utils.set_data(ctx.guild, ctx.author, "start", start)
+        await utils.set_userdata(ctx.guild, ctx.author, "start", start)
         msg += " starting at " + start + " seconds"
 
         # Check if length can be converted to a float and greater than zero
         if length and (length.isnumeric() or length.replace('.', '', 1).isdigit()) and float(length) >= 0:
-          await utils.set_data(ctx.guild, ctx.author, "length", length)
+          await utils.set_userdata(ctx.guild, ctx.author, "length", length)
           msg += " and lasting " + length + " seconds"
         else:
-          await utils.set_data(ctx.guild, ctx.author, "length", None)
+          await utils.set_userdata(ctx.guild, ctx.author, "length", None)
       else:
-        await utils.set_data(ctx.guild, ctx.author, "start", None)
-        await utils.set_data(ctx.guild, ctx.author, "length", None)
+        await utils.set_userdata(ctx.guild, ctx.author, "start", None)
+        await utils.set_userdata(ctx.guild, ctx.author, "length", None)
 
-      # embed = discord.Embed(description = )
       msg += "."
       await utils.send_embed(ctx, msg.format(ctx.author), color = 0x009900)
       print("Added new fanfare for: {0.name}".format(ctx.author))
@@ -71,9 +70,6 @@ class Fanfare(commands.Cog):
     if not ctx.author.voice:
       await utils.send_embed(ctx, "You are not in a voice channel!", color = 0xff0000)
       return
-    # if utils.get_data(context.guild, context.author, "enabled") == "false":
-    #   await utils.send_embed(context,"You do not have fanfare enabled! Use \'*enable\' to enable it.", color = 0xff0000)
-    #   return
     if str(ctx.author.id) not in utils.get_blacklist(ctx.guild):
       await utils.send_embed(ctx, "Playing {0}'s fanfare.".format(ctx.author.mention))
       await utils.play_audio(ctx.author, ctx.author.voice.channel)
@@ -101,6 +97,9 @@ class AdminSettings(commands.Cog):
         await utils.send_embed(ctx, "There is no one mentioned. Use @ to mention someone.", color = 0xff0000)
         return
       for user in ctx.message.mentions:
+        if (user.id == ctx.author.id):
+          await utils.send_embed(ctx, "You cannot blacklist yourself", color = 0xff0000)
+          continue
         if str(user.id) not in guild_blacklist:
           guild_blacklist.append(str(user.id))
           await utils.send_embed(ctx, "Added {0} to the blacklist.".format(user.mention), color = 0)
@@ -132,7 +131,53 @@ class AdminSettings(commands.Cog):
             await utils.send_embed(ctx, "Removed {0} to the blacklist.".format(user.mention), color = 0xffffff)
         await utils.save_data()
     else:
-      await utils.send_embed(ctx, "You do not have permission to whitelist members.", color = 0xff0000)     
+      await utils.send_embed(ctx, "You do not have permission to whitelist members.", color = 0xff0000)
+
+
+  @commands.command()
+  async def default(self, ctx, yt_url = None, start = None, length = None):
+    '''
+    Sets the default fanfare url.
+    Requires administrator permissions.
+    Parameters:
+      yt_url: a valid URL to a youtube video. (leave blank to restore to factory default)
+      start: the starting time of the fanfare in seconds.
+      length: the duration of the fanfare in seconds. 
+    '''
+    if str(ctx.author.id) in utils.get_blacklist(ctx.guild):
+      await utils.send_embed(ctx, "You are blacklisted and cannot change the default fanfare.", color = 0)
+      return
+    permissions = ctx.author.guild_permissions
+    if permissions.administrator:
+      # Adapted fanfare command
+      msg = ""
+      # check if url is a valid URL
+      if not yt_url or validators.url(yt_url):
+        msg += "Successfully changed default fanfare for {0}"
+        await utils.set_guilddata(ctx.guild, "url", yt_url)
+        # Check if start can be converted to a float and greater than zero
+        if start and (start.isnumeric() or start.replace('.', '', 1).isdigit()) and float(start) >= 0:
+          await utils.set_guilddata(ctx.guild, "start", start)
+          msg += " starting at " + start + " seconds"
+
+          # Check if length can be converted to a float and greater than zero
+          if length and (length.isnumeric() or length.replace('.', '', 1).isdigit()) and float(length) >= 0:
+            await utils.set_guilddata(ctx.guild, "length", length)
+            msg += " and lasting " + length + " seconds"
+          else:
+            await utils.set_guilddata(ctx.guild, "length", None)
+        else:
+          await utils.set_guilddata(ctx.guild, "start", None)
+          await utils.set_guilddata(ctx.guild, "length", None)
+
+        msg += "."
+        await utils.send_embed(ctx, msg.format(ctx.guild), color = 0x009900)
+        print("Changed default fanfare for: {0}".format(ctx.guild))
+      else:
+        await utils.send_embed(ctx, f"{yt_url} is not a valid URL!", color = 0xff0000) 
+        return
+    else:
+      await utils.send_embed(ctx, "You do not have permission to change the default fanfare.", color = 0xff0000)
 
 
 class UserSettings(commands.Cog):
@@ -143,8 +188,8 @@ class UserSettings(commands.Cog):
     Disables the user's fanfare.
     Makes it so that fanfare will not play when they join a voice channel.
     '''
-    if utils.get_data(ctx.guild, ctx.author, "enabled") != "false":
-      await utils.set_data(ctx.guild, ctx.author, "enabled", "false")
+    if utils.get_userdata(ctx.guild, ctx.author, "enabled") != "false":
+      await utils.set_userdata(ctx.guild, ctx.author, "enabled", "false")
       print("Disabling for {0}".format(ctx.author))
       await utils.send_embed(ctx, "Disabled fanfare for {0}.".format(ctx.author.mention))
 
@@ -155,10 +200,23 @@ class UserSettings(commands.Cog):
     Enables the user's fanfare.
     Makes it so that fanfare will play when they join a voice channel.
     '''
-    if utils.get_data(ctx.guild, ctx.author, "enabled") == "false":
-      await utils.set_data(ctx.guild, ctx.author, "enabled", "true")
+    if utils.get_userdata(ctx.guild, ctx.author, "enabled") == "false":
+      await utils.set_userdata(ctx.guild, ctx.author, "enabled", "true")
       print("Enabling for {0}".format(ctx.author))
-      await utils.send_embed(ctx,"Enabled fanfare for {0}.".format(ctx.author.mention))
+      await utils.send_embed(ctx, "Enabled fanfare for {0}.".format(ctx.author.mention))
+  
+
+  @commands.command()
+  async def reset(self, ctx):
+    '''
+    Resets the user's user settings to factor defaults.
+    This includes the user's fanfare and whether it disabled or not.
+    '''
+    await utils.set_userdata(ctx.guild, ctx.author, "url", None)
+    await utils.set_userdata(ctx.guild, ctx.author, "start", None)
+    await utils.set_userdata(ctx.guild, ctx.author, "length", None)
+    await utils.set_userdata(ctx.guild, ctx.author, "enabled", True)
+    await utils.send_embed(ctx, f"Successfully reset user settings for {ctx.author.mention}")
 
 
 keep_alive()
