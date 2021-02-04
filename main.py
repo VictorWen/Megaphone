@@ -17,7 +17,7 @@ async def on_ready():
 @client.event
 async def on_voice_state_update(member, before, after):
   # Check if not a bot, is not in blacklist, has fanfare enabled, and has moved to a channel
-  if not member.bot and str(member.id) not in utils.get_blacklist(member.guild) and utils.get_userdata(member.guild, member, "enabled") != "false" and after.channel is not None and before.channel != after.channel:
+  if not member.bot and str(member.id) not in utils.get_blacklist(member.guild) and utils.get_userdata(member.guild, member, "enabled") != "false" and after.channel is not None and before.channel != after.channel and after.channel.permissions_for(member.guild.me).view_channel and (after.channel.user_limit == 0 or len(after.channel.members) < after.channel.user_limit):
     print("Detected {0} joined {1} in {2}".format(member, after.channel, member.guild))
     await utils.play_audio(member, after.channel)
 
@@ -69,6 +69,9 @@ class Fanfare(commands.Cog):
     '''
     if not ctx.author.voice:
       await utils.send_embed(ctx, "You are not in a voice channel!", color = 0xff0000)
+      return
+    if not ctx.author.voice.channel.permissions_for(ctx.guild.me).view_channel or (ctx.author.voice.channel.user_limit > 0 and len(ctx.author.voice.channel.members) >= ctx.author.voice.channel.user_limit):
+      await utils.send_embed(ctx, "I cannot join that channel!", color = 0xff0000)
       return
     if str(ctx.author.id) not in utils.get_blacklist(ctx.guild):
       await utils.send_embed(ctx, "Playing {0}'s fanfare.".format(ctx.author.mention))
@@ -209,7 +212,7 @@ class UserSettings(commands.Cog):
   @commands.command()
   async def reset(self, ctx):
     '''
-    Resets the user's user settings to factor defaults.
+    Resets the user's user settings to factory defaults.
     This includes the user's fanfare and whether it disabled or not.
     '''
     await utils.set_userdata(ctx.guild, ctx.author, "url", None)

@@ -40,15 +40,13 @@ else:
 read_file.close()
 
 
-async def play_audio(member: discord.User, channel: discord.VoiceChannel):  
-  # Use the time as an id for synchronization
-  play_id = str(time.time())
-  play_ids[member.guild.id] = play_id
+async def play_audio(member: discord.User, channel: discord.VoiceChannel):
+  # await asyncio.sleep(0.5)
+  # if (play_ids[member.guild.id] != play_id):
+  #   print(f"{play_id}: Connection to {channel} in {member.guild} aborted")
+  #   return
 
-  await asyncio.sleep(0.5)
-  if (play_ids[member.guild.id] != play_id):
-    print(f"{play_id}: Connection to {channel} in {member.guild} aborted")
-    return
+  play_id = str(time.time())
 
   # Connect the voice client
   try:
@@ -66,6 +64,9 @@ async def play_audio(member: discord.User, channel: discord.VoiceChannel):
     raise e
     return
 
+  # Use the time as an id for synchronization
+  play_ids[member.guild.id] = play_id
+
   # Obtain the URL for the youtube video audio
   print(f"{play_id}: Loading Audio...")
   url = get_userdata(member.guild, member, "url")
@@ -74,7 +75,7 @@ async def play_audio(member: discord.User, channel: discord.VoiceChannel):
     guild_fanfare = True
     url = get_guilddata(member.guild, "url")
   elif not url:
-    url = "https://www.youtube.com/watch?v=x_XVntliea0"# default URL
+    url = "https://www.youtube.com/watch?v=x_XVntliea0" # default URL
 
   # Stream the audio from the youtube video as an audio player
   try:
@@ -103,8 +104,8 @@ async def play_audio(member: discord.User, channel: discord.VoiceChannel):
     audio_player = discord.PCMVolumeTransformer(audio)
   except Exception as e:
     print(f"{play_id}: Failed to load audio")
-    await member.send(embed = discord.Embed(title = "Failed to load your fanfare audio", description = f"Check if there is something wrong with your youtube link: {url}. Otherwise try again later.", color = 0xff0000))
     if play_ids[member.guild.id] == play_id:
+      await member.send(embed = discord.Embed(title = "Failed to load your fanfare audio", description = f"Check if there is something wrong with your youtube link: {url}. Otherwise try again later.", color = 0xff0000))
       await vc.disconnect()
       print(f"{play_id}: Successfully disconnected")
     raise e
@@ -118,9 +119,13 @@ async def play_audio(member: discord.User, channel: discord.VoiceChannel):
     timeout += 1
     print(f"{play_id}: Waiting for Voice Client connection, attempt #{timeout}")
     await asyncio.sleep(1)
-    if (timeout > 5):
+    if play_ids[member.guild.id] != play_id:
+      print(f"{play_id}: Aborting connection attempt")
+      return
+    if (timeout >= 5):
       print(f"{play_id}: Failed to conncect to Voice Client")
       if play_ids[member.guild.id] == play_id:
+        await member.send(embed = discord.Embed(title = "Failed to connect properly", description = "I could not connect to the voice channel properly. Please try again later.", color = 0xff0000))
         await vc.disconnect(force = True)
         print(f"{play_id}: Successfully disconnected")
       return
@@ -135,6 +140,7 @@ async def play_audio(member: discord.User, channel: discord.VoiceChannel):
     except Exception as e:
       print(f"{play_id}: Failed to play audio")
       if play_ids[member.guild.id] == play_id:
+        await member.send(embed = discord.Embed(title = "Error when playing your fanfare", description = "There was an error when tryin to play your fanfare. Please try again later.", color = 0xff0000))
         await vc.disconnect(force = True)
         print(f"{play_id}: Successfully disconnected")
       raise e
