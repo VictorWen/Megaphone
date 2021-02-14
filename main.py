@@ -31,7 +31,7 @@ class Fanfare(commands.Cog):
     Parameters:
       yt_url: a valid URL to a Youtube video.
       start: the starting time of the fanfare in seconds.
-      length: the duration of the fanfare in seconds.
+      length: the duration of the fanfare in seconds. (Maxes out at 20 secs)
     '''
     msg = ""
     # check if url is a valid URL

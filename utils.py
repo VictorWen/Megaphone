@@ -1,29 +1,33 @@
 import asyncio
 import discord
-import youtube_dl
+# import youtube_dl
 import json
 import time
 from aiofile import async_open
+import pafy
 
 # Constants
-ytdl_format_options = {
-  'format': 'bestaudio/best',
-  'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
-  'restrictfilenames': True,
-  'noplaylist': True,
-  'nocheckcertificate': True,
-  'ignoreerrors': False,
-  'logtostderr': False,
-  'quiet': True,
-  'no_warnings': True,
-  'default_search': 'auto',
-  'skip_download': True,
-  'simulate': True,
-  'source_address':
-  '0.0.0.0'  # bind to ipv4 since ipv6 addresses cause issues sometimes
-}
+# ytdl_format_options = {
+#   'format': 'bestaudio/best',
+#   'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
+#   'restrictfilenames': True,
+#   'noplaylist': True,
+#   'nocheckcertificate': True,
+#   'ignoreerrors': False,
+#   'logtostderr': False,
+#   # 'username' : os.getenv('USERNAME'),
+#   # 'password' : os.getenv('PASSWORD'),
+# #  'quiet': True,
+# #  'no_warnings': True,
+#   'default_search': 'auto',
+#   'cookiefile' : 'cookies.txt',
+#   # 'skip_download': True,
+#   # 'simulate': True,
+#   'source_address':
+#   '35.184.39.211'  # bind to ipv4 since ipv6 addresses cause issues sometimes 35.184.39.211
+# }
 
-ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
+# ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
 
 PLAYTIME = 10
 FALLOFF = 10
@@ -80,10 +84,16 @@ async def play_audio(member: discord.User, channel: discord.VoiceChannel):
   # Stream the audio from the youtube video as an audio player
   try:
     # Load the audio from Youtube-DL
-    audio_data = await asyncio.get_event_loop().run_in_executor(
-      None, lambda: ytdl.extract_info(url, download=False))
-    filename = audio_data['url']
-    duration = float(audio_data['duration'])
+    # audio_data = await asyncio.get_event_loop().run_in_executor(
+    #   None, lambda: ytdl.extract_info(url, download=False))
+    # filename = audio_data['url']
+    # duration = float(audio_data['duration'])
+
+    # Load the audio using pafy
+    audio_data = await asyncio.get_event_loop().run_in_executor(None, lambda: pafy.new(url))
+    duration = audio_data.length
+    audio_data = audio_data.getbestaudio()
+    filename = audio_data.url_https
 
     # Set options for start time and length
     ffmpeg_options = {'options': '-vn'}
