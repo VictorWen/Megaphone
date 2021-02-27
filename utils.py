@@ -1,33 +1,9 @@
 import asyncio
 import discord
-# import youtube_dl
-import json
 import time
-from aiofile import async_open
+import dataAccess as data
 import pafy
 
-# Constants
-# ytdl_format_options = {
-#   'format': 'bestaudio/best',
-#   'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
-#   'restrictfilenames': True,
-#   'noplaylist': True,
-#   'nocheckcertificate': True,
-#   'ignoreerrors': False,
-#   'logtostderr': False,
-#   # 'username' : os.getenv('USERNAME'),
-#   # 'password' : os.getenv('PASSWORD'),
-# #  'quiet': True,
-# #  'no_warnings': True,
-#   'default_search': 'auto',
-#   'cookiefile' : 'cookies.txt',
-#   # 'skip_download': True,
-#   # 'simulate': True,
-#   'source_address':
-#   '35.184.39.211'  # bind to ipv4 since ipv6 addresses cause issues sometimes 35.184.39.211
-# }
-
-# ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
 
 PLAYTIME = 10
 FALLOFF = 10
@@ -35,21 +11,11 @@ FALLOFF = 10
 connection_queue = {}
 play_ids = {}
 
-read_file = open("./data", "r")
-json_str = read_file.read()
-if json_str != "":
-  data = json.loads(json_str)
-else:
-  data = {}
-read_file.close()
+audio_cache = {}
+cache_expire = {}
 
 
 async def play_audio(member: discord.User, channel: discord.VoiceChannel):
-  # await asyncio.sleep(0.5)
-  # if (play_ids[member.guild.id] != play_id):
-  #   print(f"{play_id}: Connection to {channel} in {member.guild} aborted")
-  #   return
-
   play_id = str(time.time())
 
   # Connect the voice client
@@ -58,81 +24,43 @@ async def play_audio(member: discord.User, channel: discord.VoiceChannel):
     if not vc:
       print(f"{play_id}: Connecting...")
       vc = await channel.connect(timeout = 5)
-      print(f"{play_id}: Connected to {channel} in {member.guild}")
-    elif vc.channel != channel:
-      print(f"{play_id}: Moving to {channel} in {member.guild}")
+      print(f"{play_id}: Connected to {channel.id} in {member.guild.id}")
+    elif vc.channel.id != channel.id:
+      print(f"{play_id}: Moving to {channel.id} in {member.guild.id}")
       await vc.move_to(channel)
   except Exception as e:
     # connection_queue[member.guild.id].remove(connect_id)
-    print(f"{play_id}: Failed to conncect to {channel} in {member.guild}")
+    print(f"{play_id}: Failed to conncect to {channel.id} in {member.guild.id}")
     raise e
     return
 
   # Use the time as an id for synchronization
   play_ids[member.guild.id] = play_id
 
-  # Obtain the URL for the youtube video audio
-  print(f"{play_id}: Loading Audio...")
-  url = get_userdata(member.guild, member, "url")
-  guild_fanfare = False
-  if not url and get_guilddata(member.guild, "url"):
-    guild_fanfare = True
-    url = get_guilddata(member.guild, "url")
-  elif not url:
-    url = "https://www.youtube.com/watch?v=x_XVntliea0" # default URL
-
   # Stream the audio from the youtube video as an audio player
   try:
-    # Load the audio from Youtube-DL
-    # audio_data = await asyncio.get_event_loop().run_in_executor(
-    #   None, lambda: ytdl.extract_info(url, download=False))
-    # filename = audio_data['url']
-    # duration = float(audio_data['duration'])
-
-    # Load the audio using pafy
-    audio_data = await asyncio.get_event_loop().run_in_executor(None, lambda: pafy.new(url))
-    duration = audio_data.length
-    audio_data = audio_data.getbestaudio()
-    filename = audio_data.url_https
-
-    # Set options for start time and length
-    ffmpeg_options = {'options': '-vn'}
-    start = get_userdata(member.guild, member, "start") if not guild_fanfare else get_guilddata(member.guild, "start")
-    if start:
-      ffmpeg_options["options"] += " -ss " + start
-      duration -= float(start)
-    length = get_userdata(member.guild, member, "length") if not guild_fanfare else get_guilddata(member.guild, "length")
-    length = min(float(length), PLAYTIME + FALLOFF) if length else PLAYTIME + FALLOFF
-    if length < duration:
-      ffmpeg_options["options"] += " -t " + str(length)
-    else:
-      length = duration
-    length += 0.5
-
-    # Create discord audio player
-    audio = discord.FFmpegPCMAudio(filename, **ffmpeg_options)
-    audio_player = discord.PCMVolumeTransformer(audio)
+    print(f"{play_id}: Loading audio")
+    audio, ffmpeg_options, length = await get_user_audio(member.guild, member)
+    print(f"{play_id}: Successfully finished loading audio")
   except Exception as e:
     print(f"{play_id}: Failed to load audio")
     if play_ids[member.guild.id] == play_id:
-      await member.send(embed = discord.Embed(title = "Failed to load your fanfare audio", description = f"Check if there is something wrong with your youtube link: {url}. Otherwise try again later.", color = 0xff0000))
+      # await member.send(embed = discord.Embed(title = "Failed to load your fanfare audio", description = "Something went wrong. Please try again later.", color = 0xff0000))
       await vc.disconnect()
       print(f"{play_id}: Successfully disconnected")
     raise e
     return
 
-  print(f"{play_id}: Successfully finished loading audio")
-
   # Ensure proper connection before continuing
   timeout = 0
-  while not vc.is_connected() or vc.channel != channel:
+  while not vc.is_connected() or vc.channel.id != channel.id:
     timeout += 1
     print(f"{play_id}: Waiting for Voice Client connection, attempt #{timeout}")
     await asyncio.sleep(1)
     if play_ids[member.guild.id] != play_id:
       print(f"{play_id}: Aborting connection attempt")
       return
-    if (timeout >= 5):
+    if (timeout >= 10):
       print(f"{play_id}: Failed to conncect to Voice Client")
       if play_ids[member.guild.id] == play_id:
         await member.send(embed = discord.Embed(title = "Failed to connect properly", description = "I could not connect to the voice channel properly. Please try again later.", color = 0xff0000))
@@ -144,13 +72,16 @@ async def play_audio(member: discord.User, channel: discord.VoiceChannel):
   if play_ids[member.guild.id] == play_id:
     if vc.is_playing():
       vc.stop()
+      await asyncio.sleep(0.1)
     print(f"{play_id}: Playing audio")
     try:
+      audio_player = discord.FFmpegPCMAudio(audio, **ffmpeg_options)
+      audio_player = discord.PCMVolumeTransformer(audio_player)
       vc.play(audio_player)
     except Exception as e:
       print(f"{play_id}: Failed to play audio")
       if play_ids[member.guild.id] == play_id:
-        await member.send(embed = discord.Embed(title = "Error when playing your fanfare", description = "There was an error when tryin to play your fanfare. Please try again later.", color = 0xff0000))
+        await member.send(embed = discord.Embed(title = "Error when playing your fanfare", description = "There was an error when trying to play your fanfare. Please try again later.", color = 0xff0000))
         await vc.disconnect(force = True)
         print(f"{play_id}: Successfully disconnected")
       raise e
@@ -162,7 +93,7 @@ async def play_audio(member: discord.User, channel: discord.VoiceChannel):
 
     # normal play
     while time.time() - start_time < play_length:
-      await asyncio.sleep(0.01)
+      await asyncio.sleep(0.05)
       if play_ids[member.guild.id] != play_id:
         # If the play id has changed, stop playing
         vc.stop()
@@ -173,73 +104,81 @@ async def play_audio(member: discord.User, channel: discord.VoiceChannel):
     delta = time.time()
     while delta - start_time - play_length < falloff_time:
       audio_player.volume -= (time.time() - delta) / FALLOFF
-      await asyncio.sleep(0.01)
+      delta = time.time()
+      await asyncio.sleep(0.05)
       if play_ids[member.guild.id] != play_id:
           # If the play id has changed, stop falloff
           vc.stop()
           return
-      delta = time.time()
       
     # Finish playing
     audio_player.volume = 0
     print(f"{play_id}: Finished playing audio")
+    print(f"{play_id}: Played for {time.time() - start_time:.2f}/{length}")
     await asyncio.sleep(0.5)
     
     # If the same play id, disconnect
     if play_ids[member.guild.id] == play_id:
       vc.stop()
-      await asyncio.sleep(0.01)
+      #vc.cleanup()
+      await asyncio.sleep(0.1)
       await vc.disconnect()
       print(f"{play_id}: Successfully disconnected")
-      vc.cleanup()
   else:
     print(f"{play_id}: Audio aborted")
 
 
-def get_userdata(guild: discord.Guild, member: discord.User, tag: str):
-  if str(guild.id) in data and \
-  str(member.id) in data[str(guild.id)] and \
-  str(tag) in data[str(guild.id)][str(member.id)]:
-    return data[str(guild.id)][str(member.id)][str(tag)]
-  else:
-    return None
-
-
-async def set_userdata(guild: discord.Guild, member: discord.User, tag: str, datum: str):
-  if str(guild.id) not in data:
-    data[str(guild.id)] = {}
-  if str(member.id) not in data[str(guild.id)]:
-    data[str(guild.id)][str(member.id)] = {}
-  data[str(guild.id)][str(member.id)][str(tag)] = datum
-  await save_data()
-
-
-def get_blacklist(guild: discord.Guild):
-  if str(guild.id) not in data:
-    data[str(guild.id)] = {}
-  if "blacklist" not in data[str(guild.id)]:
-    data[str(guild.id)]["blacklist"] = []
-  return data[str(guild.id)]["blacklist"]
-
-
-def get_guilddata(guild: discord.Guild, tag: str):
-  if str(guild.id) in data and tag in data[str(guild.id)]:
-    return data[str(guild.id)][tag]
-  else:
-    return None
-
-
-async def set_guilddata(guild: discord.Guild, tag: str, datum: str):
-  if str(guild.id) not in data:
-    data[str(guild.id)] = {}
-  data[str(guild.id)][tag] = datum
-  await save_data()
+async def get_user_audio(guild: discord.Guild, member: discord.User):
+  # Grab youtube link from user data
+  yt_url = data.get_userdata(guild, member, "url")
+  guild_fanfare = False
+  if not yt_url and data.get_guilddata(member.guild, "url"):
+    guild_fanfare = True
+    yt_url = data.get_guilddata(member.guild, "url")
+  elif not yt_url:
+    yt_url = "https://www.youtube.com/watch?v=x_XVntliea0"
   
+  # Set up timings
+  start = data.get_userdata(member.guild, member, "start") if not guild_fanfare else data.get_guilddata(member.guild, "start")
+  length = data.get_userdata(member.guild, member, "length") if not guild_fanfare else data.get_guilddata(member.guild, "length")
+  length = min(float(length), PLAYTIME + FALLOFF) if length else PLAYTIME + FALLOFF
+  
+  # If the link is already cached, grab the cached audio
+  # If the cached audio is expired, renew it
+  # Otherwise cache the link's audio
+  if yt_url not in audio_cache or time.time() > cache_expire[yt_url]:
+    audio_data = await asyncio.get_event_loop().run_in_executor(None, lambda: pafy.new(yt_url))
+    duration = audio_data.length
+    if duration < float(length):
+      if not guild_fanfare: data.set_userdata(guild, member, "length", str(duration))
+      else: data.set_guilddata(guild, "length", str(duration))
+      length = duration
+    audio = audio_data.getbestaudio().url_https
+    expire = audio.find("expire=")
+    try:
+      expire = float(audio[expire+7:expire+17])
+    except Exception as e:
+      print(f"DEBUG: AUDIO URL: {audio}")
+      expire = 0
+      raise e
+    audio_cache[yt_url] = audio
+    cache_expire[yt_url] = expire
+  else:
+    audio = audio_cache[yt_url]
+  
+  # Setup FFMPEG options
+  ffmpeg_options = {'before_options': '-probesize 5M', 'options': '-vn'}
+  if start:
+    ffmpeg_options["options"] += " -ss " + start
+  ffmpeg_options["options"] += " -t " + str(length)
+  length += 0.5
 
-async def save_data():
-  async with async_open("./data", "w") as write_file:
-    write_json_str = json.dumps(data)
-    await write_file.write(write_json_str)
+  return audio, ffmpeg_options, length
+
+
+def is_in_blacklist(guild: discord.Guild, member: discord.User):
+  blacklist = data.get_guilddata(guild, "blacklist")
+  return blacklist and str(member.id) in blacklist
 
 
 async def send_embed(context: discord.ext.commands.Context, text: str, title: str = None, color: int = 0x0066cc):
@@ -249,5 +188,5 @@ async def send_embed(context: discord.ext.commands.Context, text: str, title: st
   try:
     await context.send(embed = embed)
   except discord.errors.Forbidden:
-    print(f"Missing embedded links permission for {context.channel} in {context.guild}")
+    print(f"Missing embedded links permission for {context.channel.id} in {context.guild.id}")
     await context.author.send(embed = discord.Embed(title="Missing Permissions", description = f"I do not have permissions to embed links in \"{context.channel}\"!", color = 0xff0000))
