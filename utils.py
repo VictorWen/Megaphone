@@ -63,7 +63,7 @@ async def play_audio(member: discord.User, channel: discord.VoiceChannel):
     if (timeout >= 10):
       print(f"{play_id}: Failed to conncect to Voice Client")
       if play_ids[member.guild.id] == play_id:
-        await member.send(embed = discord.Embed(title = "Failed to connect properly", description = "I could not connect to the voice channel properly. Please try again later.", color = 0xff0000))
+        # await member.send(embed = discord.Embed(title = "Failed to connect properly", description = "I could not connect to the voice channel properly. Please try again later.", color = 0xff0000))
         await vc.disconnect(force = True)
         print(f"{play_id}: Successfully disconnected")
       return
@@ -81,7 +81,7 @@ async def play_audio(member: discord.User, channel: discord.VoiceChannel):
     except Exception as e:
       print(f"{play_id}: Failed to play audio")
       if play_ids[member.guild.id] == play_id:
-        await member.send(embed = discord.Embed(title = "Error when playing your fanfare", description = "There was an error when trying to play your fanfare. Please try again later.", color = 0xff0000))
+        # await member.send(embed = discord.Embed(title = "Error when playing your fanfare", description = "There was an error when trying to play your fanfare. Please try again later.", color = 0xff0000))
         await vc.disconnect(force = True)
         print(f"{play_id}: Successfully disconnected")
       raise e
@@ -146,7 +146,9 @@ async def get_user_audio(guild: discord.Guild, member: discord.User):
   # If the link is already cached, grab the cached audio
   # If the cached audio is expired, renew it
   # Otherwise cache the link's audio
-  if yt_url not in audio_cache or time.time() > cache_expire[yt_url]:
+  audio = data.get_userdata(guild, member, "audio")
+  expire = data.get_userdata(guild, member, "expire")
+  if not audio or time.time() > float(expire):
     audio_data = await asyncio.get_event_loop().run_in_executor(None, lambda: pafy.new(yt_url))
     duration = audio_data.length
     if duration < float(length):
@@ -155,19 +157,22 @@ async def get_user_audio(guild: discord.Guild, member: discord.User):
       length = duration
     audio = audio_data.getbestaudio().url_https
     expire = audio.find("expire=")
-    try:
+    expire2 = audio.find("expire/")
+    if expire > 0:
       expire = float(audio[expire+7:expire+17])
-    except Exception as e:
-      print(f"DEBUG: AUDIO URL: {audio}")
+      print(f"DEBUG: EXPIRATION IN {expire - time.time()} SECONDS")
+    elif expire2 > 0:
+      expire = float(audio[expire2+7:expire2+17])
+      print(f"DEBUG: EXPIRATION IN {expire - time.time()} SECONDS")
+    else:
+      print(f"DEBUG: YOUTUBE URL {yt_url}")
+      print(f"DEBUG: AUDIO URL {audio}")
       expire = 0
-      raise e
-    audio_cache[yt_url] = audio
-    cache_expire[yt_url] = expire
-  else:
-    audio = audio_cache[yt_url]
+    data.set_userdata(guild, member, "audio", audio)
+    data.set_userdata(guild, member, "expire", expire)
   
   # Setup FFMPEG options
-  ffmpeg_options = {'before_options': '-probesize 5M', 'options': '-vn'}
+  ffmpeg_options = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -probesize 5M', 'options': '-vn'}
   if start:
     ffmpeg_options["options"] += " -ss " + start
   ffmpeg_options["options"] += " -t " + str(length)

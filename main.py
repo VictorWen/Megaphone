@@ -39,6 +39,7 @@ class Fanfare(commands.Cog):
     if validators.url(yt_url):
       msg += "Successfully added new fanfare for {0.mention}"
       data.set_userdata(ctx.guild, ctx.author, "url", yt_url)
+      data.set_userdata(ctx.guild, ctx.author, "audio", None)
       # Check if start can be converted to a float and greater than zero
       if start and (start.isnumeric() or start.replace('.', '', 1).isdigit()) and float(start) >= 0:
         data.set_userdata(ctx.guild, ctx.author, "start", start)
@@ -221,6 +222,7 @@ class UserSettings(commands.Cog):
     This includes the user's fanfare and whether it disabled or not.
     '''
     data.set_userdata(ctx.guild, ctx.author, "url", None)
+    data.set_userdata(ctx.guild, ctx.author, "audio", None)
     data.set_userdata(ctx.guild, ctx.author, "start", None)
     data.set_userdata(ctx.guild, ctx.author, "length", None)
     data.set_userdata(ctx.guild, ctx.author, "enabled", True)
